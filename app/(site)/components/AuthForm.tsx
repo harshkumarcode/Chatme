@@ -13,6 +13,7 @@ import { toast } from "react-hot-toast";
 import { signIn, useSession } from 'next-auth/react';
 import { useRouter } from "next/navigation";
 import LoadingModal from "@/app/components/modals/LoadingModal";
+import { sub } from "date-fns";
 
 type Variant = "LOGIN" | "REGISTER" | "FORGOT_PASSWORD" | "VERIFY_OTP" | "CHANGE_PASSWORD";
 type subVariant = "VERIFY_OTP_CREATE_USER_CALL" | "VERIFY_OTP_CHANGE_PASSWORD_CALL" | ''
@@ -20,7 +21,7 @@ type subVariant = "VERIFY_OTP_CREATE_USER_CALL" | "VERIFY_OTP_CHANGE_PASSWORD_CA
 const AuthForm = () => {
     const session = useSession()
     const router = useRouter()
-    const [variant, setVariant] = useState<Variant>('VERIFY_OTP');
+    const [variant, setVariant] = useState<Variant>('LOGIN');
     const [isLoading, setIsLoading] = useState(false);
     const [subVariant, setSubVariant] = useState<subVariant>('');
 
@@ -58,29 +59,22 @@ const AuthForm = () => {
         return false;
     }
 
-    // expire otp after 180 second
+    const [countdown, setCountdown] = useState(180);
     useEffect(() => {
         if (subVariant === 'VERIFY_OTP_CREATE_USER_CALL' || subVariant === 'VERIFY_OTP_CHANGE_PASSWORD_CALL') {
-            startCountdown();
+            let timer = setInterval(() => {
+                setCountdown((prev) => prev - 1);
+            }, 1000);
             setTimeout(() => {
                 toast.error("OTP expired!");
                 setVariant('LOGIN');
                 setSubVariant('');
                 setOtpObj({ email: '', otp: '' });
-            }, 180000)
+                clearInterval(timer);
+            }, 180000);
+            setCountdown(180);
         }
     }, [subVariant])
-
-    // create a coutdown timer for otp
-    const [countdown, setCountdown] = useState(180);
-    const startCountdown = () => {
-        let timer = setInterval(() => {
-            setCountdown((prev) => prev - 1);
-        }, 1000);
-        setTimeout(() => {
-            clearInterval(timer);
-        }, 180000);
-    };
 
 
     const onSubmit: SubmitHandler<FieldValues> = (data) => {
@@ -96,9 +90,10 @@ const AuthForm = () => {
                 })
                 .catch((error) => toast.error(error.response.data.message))
                 .finally(() => { setIsLoading(false) });
+            setSubVariant('');
         }
 
-        if (subVariant === 'VERIFY_OTP_CREATE_USER_CALL') {
+        if (variant === "VERIFY_OTP" && subVariant === 'VERIFY_OTP_CREATE_USER_CALL') {
             if (!verifyOtp(data.otp, otpObj.otp)) {
                 toast.error("Invalid OTP!");
                 setIsLoading(false)
@@ -121,7 +116,6 @@ const AuthForm = () => {
                 })
                 .catch((error) => toast.error(error.response.data.message))
                 .finally(() => setIsLoading(false));
-            setSubVariant('');
         }
 
         if (variant === 'FORGOT_PASSWORD') {
@@ -136,7 +130,7 @@ const AuthForm = () => {
                 .finally(() => { setIsLoading(false) });
         }
 
-        if (subVariant === 'VERIFY_OTP_CHANGE_PASSWORD_CALL') {
+        if (variant === 'VERIFY_OTP' && subVariant === 'VERIFY_OTP_CHANGE_PASSWORD_CALL') {
             if (!verifyOtp(data.otp, otpObj.otp)) {
                 toast.error("Invalid OTP!");
                 setIsLoading(false)
@@ -147,7 +141,7 @@ const AuthForm = () => {
             setSubVariant('');
         }
 
-        if (variant === 'CHANGE_PASSWORD') {
+        if (variant === 'CHANGE_PASSWORD' && subVariant === '') {
             if (data.newpassword !== data.confirmPassword) {
                 toast.error("Passwords do not match!");
                 setIsLoading(false)
